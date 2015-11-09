@@ -49,6 +49,12 @@ evalInstr p (Branch t e) (_           : s, h, l) = evalExpr p e (s, h, l)
 evalInstr p (TailCall x) (s, h, l) = do
     (s', h', _) <- eval p x (s, h, M.empty)
     return (s', h', l)
+evalInstr p (Call "put_string") (ValStr s : ss, h, l) = do
+    putStr s
+    return (ValNum 0 : ss, h, l)
+evalInstr p (Call "put_string_line") (ValStr s : ss, h, l) = do
+    putStrLn s
+    return (ValNum 0 : ss, h, l)
 evalInstr p (Call x) (s, h, l) = do
     (s', h', _) <- eval p x (s, h, M.empty)
     return (s', h', l)

@@ -36,7 +36,8 @@ defFuns = M.fromList
         ("|", biFun "num" "num" "num"),
         ("^", biFun "num" "num" "num"),
 
-        ("put_string", ([TyName "str"], TyName "num"))
+        ("put_string", ([TyName "str"], TyName "num")),
+        ("put_string_line", ([TyName "str"], TyName "num"))
     ]
 
 
