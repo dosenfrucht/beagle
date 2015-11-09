@@ -35,7 +35,7 @@ eval p f (s, h, l) = case M.lookup f p of
 evalExpr :: Prog -> [Instruction] -> Mem -> IO Mem
 evalExpr p [] (s, h, l) = return (s, h, l)
 evalExpr p (x:xs) (s, h, l) = do
-    print s
+    -- print s
     newMem@(s, _, l) <- evalInstr p x (s, h, l)
     evalExpr p xs newMem
 
@@ -46,7 +46,7 @@ evalInstr p (PushStr x)  (s, h, l) = return (ValStr  x : s, h, l)
 evalInstr p (PushBool x) (s, h, l) = return (ValBool x : s, h, l)
 evalInstr p (Branch t e) (ValBool True: s, h, l) = evalExpr p t (s, h, l)
 evalInstr p (Branch t e) (_           : s, h, l) = evalExpr p e (s, h, l)
-evalInstr p (TailCall x) (s, h, _) = do
+evalInstr p (TailCall x) (s, h, l) = do
     (s', h', _) <- eval p x (s, h, M.empty)
     return (s', h', l)
 evalInstr p (Call x) (s, h, l) = do
