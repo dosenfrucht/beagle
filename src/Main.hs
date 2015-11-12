@@ -3,8 +3,8 @@ module Main where
 import Lexer
 import Parser
 import Codecheck
-import Compiler
-import Interpreter
+import Desugar
+import Lifter
 
 main :: IO ()
 main = do
@@ -12,9 +12,9 @@ main = do
     let toks = lexer src
     case parse toks of
         Left err  -> putStrLn err
-        Right res -> case check res of
-            Left err -> putStrLn err
-            Right res' -> let c = compile res'
-                          in do print c
-                                res <- runProg c
-                                print res
+        Right res -> let res' = desugar res
+                     in
+                     case typecheck res' of
+                         Left err -> putStrLn err
+                         Right res'' -> do
+                             mapM_ print $ lamLift res''

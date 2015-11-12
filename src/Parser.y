@@ -49,6 +49,7 @@ import Syntax
     '.'  { TDot }
     '{'  { TOCBracket }
     '}'  { TCCBracket }
+    '\\' { TLam }
 
 
 %nonassoc '==' '/='
@@ -85,7 +86,6 @@ type1 : qualname       { TyName $1 }
       | '(' type ')'   { $2 }
 
 functiondef : qualname '(' params ')' ':' type '=' expr ';'   { TopFunDef $1 (reverse $3) $6 $8 }
-            | qualname '(' ')' ':' type '=' expr ';'          { TopFunDef $1 [] $5 $7 }
 
 params : params ',' qualname ':' type { ($3, $5) : $1    }
        | qualname ':' type            { [($1, $3)] }
@@ -114,10 +114,10 @@ expr : if '(' expr ')' expr else expr  { If $3 $5 $7 }
 block : expr ';'        { [$1] }
       | block expr ';'  { $2 : $1 }
 
-factor : qualname '(' args ')' { Funcall $1 (reverse $3) }
-       | qualname '(' ')'      { Funcall $1 [] }
+factor : expr '(' args ')' { Funcall $1 (reverse $3) }
        | num               { Lit $1 }
        | str               { Str $1 }
+       | '\\' '(' qualname ':' type ')' '->' expr { Lam $3 $5 $8 }
        | true  { BoolConst True }
        | false { BoolConst False }
        | qualname              { Var $1 }

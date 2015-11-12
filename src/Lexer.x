@@ -50,6 +50,7 @@ tokens :-
     \^   { \s -> TOpXor }
     \{   { \s -> TOCBracket }
     \}   { \s -> TCCBracket }
+    \\   { \s -> TLam }
 
 {
 lexer :: String -> [Token]
@@ -87,5 +88,6 @@ data Token = TNum Word64
            | TDot
            | TOCBracket
            | TCCBracket
+           | TLam
            deriving (Show)
 }

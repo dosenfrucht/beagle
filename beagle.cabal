@@ -22,6 +22,7 @@ executable beagle
   -- other-extensions:
   build-depends:       base >=4.8 && <4.9,
                        containers,
-                       array
+                       array,
+                       mtl
   hs-source-dirs:      src
   default-language:    Haskell2010
