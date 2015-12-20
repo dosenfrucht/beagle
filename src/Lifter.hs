@@ -8,12 +8,18 @@ import qualified Data.Map as M
 
 import Control.Monad.RWS
 import Data.Maybe
+import Data.List
 
 import Codecheck
 import Syntax
-
+                        --      frees  args
 data SuperComb = SuperComb Name [Name] [Name] CoreExpr
-               deriving (Show, Eq)
+               deriving (Eq)
+
+instance Show SuperComb where
+    show (SuperComb n fs as e) = n ++ "(" ++ intercalate ", " fs ++ ")("
+                                   ++ intercalate ", " as ++ ") = "
+                                   ++ show e ++ ";"
 
 
 
@@ -22,12 +28,10 @@ lamLift cs = concatMap (lift' te) cs
     where te = typeEnv cs
 
 lift' :: TypeEnv -> CoreToplevel -> [SuperComb]
-lift' te (CTopVarDef n _ e) = SuperComb n freeVars (reverse args) e'' : ll
+lift' te (CTopVarDef n _ e) = SuperComb n [] (reverse args) e'' : ll
     where args        = map fst eArgs
           (eArgs, e') = removeTrailingLambdas e
-          (e'', ll)   = liftExpr n te' e'
-          freeVars    = S.toList $ free te e
-          te'         = extendManyTypeEnv te eArgs
+          (e'', ll)   = liftExpr n te e'
 
 
 removeTrailingLambdas :: CoreExpr -> ([(Name, Type)], CoreExpr)
@@ -37,11 +41,11 @@ removeTrailingLambdas = rm []
 
 
 liftExpr :: String -> TypeEnv -> CoreExpr -> (CoreExpr, [SuperComb])
-liftExpr s te e = let (e', _, s') = runRWS (l s e) te ()
+liftExpr s te e = let (e', _, s') = runRWS (l s e) te te
                   in (e', s')
     where l :: String
             -> CoreExpr
-            -> RWS TypeEnv [SuperComb] () CoreExpr
+            -> RWS TypeEnv [SuperComb] TypeEnv CoreExpr
           l s e = case e of
                     CIf c t e -> do
                         c' <- l s c
@@ -57,7 +61,11 @@ liftExpr s te e = let (e', _, s') = runRWS (l s e) te ()
                     CLet n d e -> do
                         let s' = s ++ "_" ++ n
                         d' <- l s d
+                        te <- get
+                        let te' = extendManyTypeEnv te [(n, undefined)]
+                        put te'
                         e' <- l s' e
+                        put te
                         pure $ CLet n d' e'
 
                     CSeq a b -> do
@@ -65,15 +73,11 @@ liftExpr s te e = let (e', _, s') = runRWS (l s e) te ()
                         b' <- l s b
                         pure $ CSeq a' b'
 
-                    -- TODO Still needs a looooot of work. I suppose.
-                    -- ¯\_(._.)_/¯
-                    -- At least its something.
                     lam@(CLam n t e) -> do
-                        te' <- ask
-                        lam' <- l (s ++ ":") e
-                        let frees = S.toList $ free te' lam
+                        te <- ask
+                        let frees = S.toList $ free te lam
                             (eArgs, e') = removeTrailingLambdas lam
-                            scomb = SuperComb (s ++ ":") frees (map fst eArgs) lam'
+                            scomb = SuperComb (s ++ ":") frees (reverse $ map fst eArgs) e'
                         tell [scomb]
                         pure $ foldl CApp (CVar (s ++ ":")) (map CVar frees)
 
@@ -94,12 +98,11 @@ free te e = case e of
     CVar s | isNothing $ getFromTypeEnv te s -> S.singleton s
            | otherwise                       -> S.empty
 
-    CLam n t e -> free (extendTypeEnv te n t) e
+    CLam n t e -> n `S.delete` free te e
 
     CApp l r -> free te l `S.union` free te r
 
-    CLet n d e -> free te d `S.union`
-                  free (extendTypeEnv te n (right $ getType te d)) e
+    CLet n d e -> n `S.delete` free te e
 
     CSeq l r-> free te l `S.union` free te r
 

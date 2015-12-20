@@ -1,4 +1,4 @@
-x : num -> num =
-	let a = 3 in
-	let f = \(x : num) -> \(b : num) -> x + b
-	in f(a);
+main(n : num) : num = {
+	let f = \(m : num) -> n + m
+	in f(5);
+};
