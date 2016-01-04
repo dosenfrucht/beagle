@@ -1,4 +1,4 @@
-main(n : num) : num = {
-	let f = \(m : num) -> n + m
-	in f(5);
-};
+answer : num = 2 * 21;
+
+let_test : num = let x = 2
+                 in  x * answer;

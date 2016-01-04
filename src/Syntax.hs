@@ -1,8 +1,10 @@
 module Syntax where
 
 import Data.Word
+import Data.List
 
 type Name = String
+type Var  = Name
 
 data Toplevel = TopFunDef Name [(Name, Type)] Type Expr
               | TopVarDef Name Type Expr
@@ -28,6 +30,18 @@ data Type = TyName Name
 instance Show Type where
     show (TyName n)  = n
     show (TyFun l r) = "(" ++ show l ++ " -> " ++ show r ++ ")"
+
+
+
+                        --      frees  args
+data SuperComb = SuperComb Name [Name] [Name] CoreExpr
+    deriving (Eq)
+
+instance Show SuperComb where
+    show (SuperComb n fs as e) = n ++ "(" ++ intercalate ", " fs ++ ")("
+                   ++ intercalate ", " as ++ ") = "
+                   ++ show e ++ ";"
+
 
 data CoreToplevel = CTopVarDef Name Type CoreExpr
                   deriving (Show, Eq)

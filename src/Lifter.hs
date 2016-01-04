@@ -6,20 +6,13 @@ module Lifter (
 import qualified Data.Set as S
 import qualified Data.Map as M
 
+import Control.Applicative
 import Control.Monad.RWS
 import Data.Maybe
 import Data.List
 
 import Codecheck
 import Syntax
-                        --      frees  args
-data SuperComb = SuperComb Name [Name] [Name] CoreExpr
-               deriving (Eq)
-
-instance Show SuperComb where
-    show (SuperComb n fs as e) = n ++ "(" ++ intercalate ", " fs ++ ")("
-                                   ++ intercalate ", " as ++ ") = "
-                                   ++ show e ++ ";"
 
 
 
@@ -59,7 +52,7 @@ liftExpr s te e = let (e', _, s') = runRWS (l s e) te te
                         pure $ CApp a' b'
 
                     CLet n d e -> do
-                        let s' = s ++ "_" ++ n
+                        let s' = s ++ '_' : n
                         d' <- l s d
                         te <- get
                         let te' = extendManyTypeEnv te [(n, undefined)]

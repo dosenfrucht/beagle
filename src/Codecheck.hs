@@ -10,6 +10,7 @@ module Codecheck (
 import qualified Data.Map as M
 
 import Control.Monad
+import Control.Applicative
 
 import Syntax
 
@@ -19,19 +20,20 @@ type TypeEnv = M.Map String Type
 defaultTypes :: TypeEnv
 defaultTypes = M.fromList
     [
-    ("+", biFun "num" "num" "num"),
-    ("-", biFun "num" "num" "num"),
-    ("*", biFun "num" "num" "num"),
-    ("/", biFun "num" "num" "num"),
-    ("%", biFun "num" "num" "num"),
-    (">", biFun "num" "num" "bool"),
-    ("<", biFun "num" "num" "bool"),
-    ("==", biFun "num" "num" "bool"),
-    ("/=", biFun "num" "num" "bool"),
-    (">>", biFun "num" "num" "num"),
-    ("<<", biFun "num" "num" "num"),
-    ("&", biFun "num" "num" "num"),
-    ("|", biFun "num" "num" "num")
+    ("$__add__$", biFun "num" "num" "num"),
+    ("$__sub__$", biFun "num" "num" "num"),
+    ("$__mult__$", biFun "num" "num" "num"),
+    ("$__div__$", biFun "num" "num" "num"),
+    ("$__mod__$", biFun "num" "num" "num"),
+    ("$__greater__$", biFun "num" "num" "bool"),
+    ("$__lower__$", biFun "num" "num" "bool"),
+    ("$__equal__$", biFun "num" "num" "bool"),
+    ("$__notequal_$", biFun "num" "num" "bool"),
+    ("$__shiftr__$", biFun "num" "num" "num"),
+    ("$__shiftl__$", biFun "num" "num" "num"),
+    ("$__and__$", biFun "num" "num" "num"),
+    ("$__or__$", biFun "num" "num" "num"),
+    ("$__xor__$", biFun "num" "num" "num")
     ]
 
 biFun :: String -> String -> String -> Type
@@ -69,6 +71,12 @@ typeEnv (CTopVarDef n t _ :xs) = M.insert n t (typeEnv xs)
 getType :: TypeEnv -> CoreExpr -> Either String Type
 getType te e = case e of
 
+    CLit _ -> pure $ TyName "num"
+
+    CStr _ -> pure $ TyName "str"
+
+    CBool _ -> pure $ TyName "bool"
+
     CIf c t e -> do
         c' <- getType te c
         t' <- getType te t
@@ -80,12 +88,6 @@ getType te e = case e of
                     then fail $ "Could not match type " ++ show t' ++ " with "
                                   ++ show e'
                     else pure t'
-
-    CLit _ -> pure $ TyName "num"
-
-    CStr _ -> pure $ TyName "str"
-
-    CBool _ -> pure $ TyName "bool"
 
     CVar n -> case M.lookup n te of
                 Nothing -> fail $ "Unknown identifier: " ++ n

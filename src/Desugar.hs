@@ -22,7 +22,7 @@ desugarExpr e = case e of
 
     If c t e -> CIf (desugarExpr c) (desugarExpr t) (desugarExpr e)
 
-    Op op l r -> CApp (CApp (CVar op) (desugarExpr l)) (desugarExpr r)
+    Op op l r -> CApp (CApp (CVar (opName op)) (desugarExpr l)) (desugarExpr r)
 
     Lit l -> CLit l
 
@@ -41,3 +41,21 @@ desugarExpr e = case e of
     Block xs -> seqs xs
         where seqs [x]    = desugarExpr x
               seqs (x:xs) = desugarExpr x `CSeq` seqs xs
+
+
+opName :: String -> String
+opName op = case op of
+                "==" -> "$__equal__$"
+                "/=" -> "$__notequal_$"
+                "<<" -> "$__shiftl__$"
+                ">>" -> "$__shiftr__$"
+                "&"  -> "$__and__$"
+                "|"  -> "$__or__$"
+                "^"  -> "$__xor__$"
+                "<"  -> "$__lower__$"
+                ">"  -> "$__greater__$"
+                "+"  -> "$__add__$"
+                "-"  -> "$__sub__$"
+                "*"  -> "$__mult__$"
+                "/"  -> "$__div__$"
+                "%"  -> "$__mod__$"
