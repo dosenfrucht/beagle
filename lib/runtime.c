@@ -2,6 +2,243 @@
 #include <stdio.h>
 #include <stdint.h>
 
+// LCD
+//------------------------------------------------------------------------------
+
+
+#define E_PIN 1
+#define LED_PIN 2
+#define RS_PIN 0
+
+#define LCD_WIDTH  20
+#define LCD_HEIGHT 4
+
+#define TAB_WIDTH 4
+
+#ifndef F_CPU
+#define F_CPU 16000000UL  	// 16 MHz ATmega328P
+#endif
+
+
+#include <avr/io.h>
+#include <string.h>
+#include <stdint.h>
+#include <util/delay.h>
+#include <stdarg.h>
+
+
+static uint8_t lcd_y = 0;
+static uint8_t lcd_x = 0;
+
+static void lcd_send_byte(uint8_t wert, uint8_t RS)
+{
+	if (RS) PORTC |= (1<<RS_PIN);
+	else PORTC &= ~(1<<RS_PIN);
+
+	PORTD &= 0x0F;
+	PORTD |= wert << 4;
+	PORTC |= (1<<E_PIN); // Enable
+	_delay_us(200);
+	PORTC &= ~(1<<E_PIN); // Disable
+}
+
+static void lcd_command(uint8_t data)
+{
+	lcd_send_byte(data >> 4,0);
+	lcd_send_byte(data & 0x0F,0);
+}
+
+static void lcd_raw_char(uint8_t data)
+{
+	lcd_send_byte(data >> 4,1);
+	lcd_send_byte(data & 0x0F,1);
+}
+
+void lcd_print_tab()
+{
+	if (lcd_x % TAB_WIDTH == 0 && lcd_x != LCD_WIDTH) {
+		lcd_print_char(' ');
+	}
+	while (lcd_x % TAB_WIDTH != 0) {
+		lcd_print_char(' ');
+	}
+}
+
+void lcd_print_char(uint8_t data)
+{
+
+	if (lcd_y == LCD_HEIGHT) {
+		lcd_clear();
+		lcd_set_cursor(0, 0);
+	}
+	if (lcd_x == LCD_WIDTH) {
+		lcd_set_cursor(lcd_y + 1, 0);
+	}
+
+	if (data == '\n') {
+		if (lcd_x == 0) {
+			return;
+		}
+		uint8_t y = lcd_y;
+		for (int i = lcd_x; i < LCD_WIDTH; i++) {
+			lcd_raw_char(' ');
+		}
+		lcd_set_cursor(y + 1, 0);
+		return;
+	}
+
+	if (data == '\t') {
+		lcd_print_tab();
+		return;
+	}
+
+	lcd_x++;
+
+
+	lcd_raw_char(data);
+}
+
+void lcd_printf(char *msg, ...)
+{
+	va_list l;
+	va_start(l, msg);
+
+	while (*msg != '\0') {
+		if (*msg == '%') {
+			msg++;
+			switch (*msg) {
+			case 'u':
+				lcd_print_uint(va_arg(l, uint16_t));
+				msg++;
+				break;
+			case 'd':
+			case 'i':
+				lcd_print_int(va_arg(l, int16_t));
+				msg++;
+				break;
+			case 's':
+				lcd_print_string(va_arg(l, char *));
+				msg++;
+				break;
+			case 'c':
+				lcd_print_char((uint8_t) va_arg(l, int));
+				msg++;
+				break;
+			case '%':
+			default:
+				lcd_print_char('%');
+				msg++;
+				break;
+			}
+		}
+		lcd_print_char(*msg);
+		msg++;
+	}
+
+	va_end(l);
+}
+
+void lcd_write(char *text, uint8_t anz)
+{
+	uint8_t i;
+	for (i=0; i<anz; i++)
+	{
+		lcd_print_char(text[i]);
+	}
+}
+
+void lcd_set_cursor(uint8_t y, uint8_t x)
+{
+	lcd_y = y;
+	lcd_x = x;
+	if (y % 2 == 1)
+		lcd_command(0xC0 + ((y - 1) / 2) * LCD_WIDTH + x);
+	else
+		lcd_command(0x80 + (y / 2) * LCD_WIDTH + x);
+}
+void lcd_print_string(char * text)
+{
+	while (*text != '\0') {
+		lcd_print_char(*text);
+		text++;
+	}
+}
+
+static void lcd_print_uint_(uint16_t n)
+{
+	if (n == 0) {
+		return;
+	}
+	lcd_print_uint_(n / 10);
+	lcd_print_char('0' + n % 10);
+}
+
+void lcd_print_uint(uint16_t n)
+{
+	if (n == 0) {
+		lcd_print_char('0');
+		return;
+	}
+	lcd_print_uint_(n);
+}
+
+void lcd_print_int(int16_t n)
+{
+	if (n == 0) {
+		lcd_print_char('0');
+		return;
+	}
+	if (n < 0) {
+		lcd_print_char('-');
+		n = -n;
+	}
+	lcd_print_uint_((uint16_t) n);
+}
+
+void lcd_set_backlight(uint8_t val)
+{
+	if (val == 0) {
+		PORTC |= 1 << LED_PIN;
+	} else {
+		PORTC &= ~(1 << LED_PIN);
+	}
+}
+
+void lcd_clear()
+{
+	lcd_command(0x01);
+	_delay_ms(15);
+}
+
+void lcd_init()
+{
+	DDRD |= 0xF0;
+	DDRC |= 0x07;
+	_delay_ms(25);
+	lcd_send_byte(0x03,0);		// 8 Bit Mode
+	_delay_ms(80);
+	lcd_send_byte(0x03,0); 	// 8 Bit Mode
+	_delay_ms(15);
+	lcd_send_byte(0x03,0);		// 8 Bit Mode
+	_delay_ms(15);
+	lcd_send_byte(0x02,0);  	// 4 Bit Mode
+
+	lcd_command(0x28);	 	// 4 Bit Mode
+	lcd_command(0x08);	 	// Display aus
+	lcd_command(0x01);	 	// Display loeschen
+	_delay_ms(15);
+	lcd_command(0x06);	 	// Cursor inc, Anzeige nicht schieben
+	lcd_command(0x0C);	 	// Cursor aus, Anzeige an
+}
+
+// -----------------------------------------------------------------------------
+
+
+
+
+
+
+
 typedef void (*__fun)();
 
 struct __val;
@@ -40,6 +277,15 @@ uint8_t __num_args(struct __node *r)
         r = r->next;
     }
     return n;
+}
+
+void __free_args(struct __node *r)
+{
+    if (r == NULL) {
+        return;
+    }
+    __free_args(r->next);
+    free(r);
 }
 
 struct __val __val_create_num(uint32_t n)
@@ -114,7 +360,8 @@ void __call_once()
         __args_to_stack(v.args);
         ((__fun) (v.data))();
         // free the args?
-
+        //__free_args(v.args);
+        //v.args = NULL;
         // i think i have to ask the nonexistent garbage collector first
     }
 }

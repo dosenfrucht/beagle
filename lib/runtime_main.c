@@ -2,7 +2,9 @@
 
 int main()
 {
+    lcd_init();
     struct __val v = b_main_b();
-    printf("%d\n", v.data);
+    lcd_printf("main -> %d\n", v.data);
+    while (42) {}
     return 0;
 }
