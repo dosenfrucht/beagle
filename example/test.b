@@ -1,4 +1,7 @@
-answer : num = 2 * 21;
+fact(n : num) : num =
+	if (n == 0)
+		1
+	else
+		n * fact(n - 1);
 
-let_test : num = let x = 2
-                 in  x * answer;
+main : num = fact(4);

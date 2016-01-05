@@ -1,6 +1,7 @@
 module Main where
 
 import Control.Monad
+import System.IO
 
 import Lexer
 import Parser
@@ -8,10 +9,14 @@ import Codecheck
 import Desugar
 import Lifter
 import Bytecode
+import Codegen
 
 main :: IO ()
 main = do
     src <- readFile "example/test.b"
+
+    h <- openFile "example/test.c" WriteMode
+
     let toks = lexer src
     case parse toks of
         Left err  -> putStrLn err
@@ -22,9 +27,15 @@ main = do
                          Right res'' -> do
                              let combs = lamLift res''
                                  code  = compile combs
-                             forM_ code $ \(n, ic, c) -> do
-                                 putStrLn n
-                                 print ic
-                                 forM_ c $ \i -> do
-                                     putStr "    "
-                                     print i
+                                 cfuns = map cGen code
+                             rc <- runtimeCode
+                             rm <- runtimeMain
+                             hPutStrLn h rc
+                             forM_ (map fst cfuns) $ \l ->
+                                 forM_ l $ hPutStrLn h
+                             forM_ (map snd cfuns) $ hPutStrLn h
+
+                             hPutStrLn h rm
+
+                             hFlush h
+                             hClose h

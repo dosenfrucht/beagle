@@ -55,7 +55,7 @@ tokens :-
 {
 lexer :: String -> [Token]
 lexer = alexScanTokens
-data Token = TNum Word64
+data Token = TNum Word32
            | TString String
            | TIden String
            | TArrow

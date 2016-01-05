@@ -1,5 +1,7 @@
 module Bytecode (
-    compile
+    compile,
+    CompiledFun,
+    Instruction (..)
 ) where
 
 import Data.Monoid
@@ -11,7 +13,7 @@ import Data.List hiding (concatMap, sum)
 import Syntax
 
 -- actual bytecode instruction set
-data Instruction = PushNum    Word64
+data Instruction = PushNum    Word32
                  | PushStr    String
                  | PushVar    Int    -- Offset im Stack
                  | PushGlobal String
@@ -34,21 +36,24 @@ instance Eq Instruction where
     Cond a b     == Cond x y     = a == x && b == y
     _            == _            = False
 
---                  Name, isCAF, Code
-type CompiledFun = (Name, Bool, [Instruction])
+--                  Name, isCAF, NumArgs, Code
+type CompiledFun = (Name, Bool, Int, [Instruction])
 
 compile :: [SuperComb] -> [CompiledFun]
 compile = map compileSC
 
 compileSC :: SuperComb -> CompiledFun
-compileSC (SuperComb n fs as e) = (n, isCAF, simplify $ toList code)
-    where code  = generateCode (reverse $ fs ++ as) e
-                      <> fromList [Unwind . length $ fs ++ as, Return]
+compileSC (SuperComb n fs as e) = (n, isCAF, la, simplify $ toList code)
+    where code  = generateCode (fs ++ as) e
+                      <> fromList (Unwind la : (if isCAF then []
+                                                         else [Return]))
           isCAF = null $ fs ++ as
+          la    = length fs + length as
 
 
 generateCode :: [Name] -> CoreExpr -> Seq Instruction
-generateCode vs e = case e of
+generateCode vs e = let vs' = "." : vs in
+                    case e of
 
     CLit i -> singleton $ PushNum i
 
@@ -61,13 +66,13 @@ generateCode vs e = case e of
     CLet n d e -> generateCode vs d <> generateCode (n : vs) e
                                     <> singleton (Unwind 1)
 
-    CApp l r -> generateCode vs r <> generateCode vs l <> singleton (Call 1)
+    CApp l r -> generateCode vs r <> generateCode vs' l <> singleton (Call 1)
 
-    CSeq a b -> generateCode vs a <> singleton (Unwind 1) <> generateCode vs b
+    CSeq a b -> generateCode vs a <> singleton Pop <> generateCode vs b
 
     CIf c t e -> generateCode vs c <> singleton (Cond
-                                                    (toList $ generateCode vs t)
-                                                    (toList $ generateCode vs e)
+                                                  (toList $ generateCode vs t)
+                                                  (toList $ generateCode vs e)
                                                 )
 
 
@@ -89,6 +94,7 @@ flatten (Call i : xs) = [Call n]
     where n = sum $ map unCallOrUnUnwind (Call i : xs)
 flatten (Unwind i : xs) = if n == 0 then [] else [Unwind n]
     where n = sum $ map unCallOrUnUnwind (Unwind i : xs)
+flatten (Cond t e : xs) = Cond (simplify t) (simplify e) : flatten xs
 flatten x = x
 
 
