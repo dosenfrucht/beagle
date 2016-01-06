@@ -81,6 +81,8 @@ mangleChar c = case c of
 
     '$' -> "builtin"
 
-    ':' -> "closure"
+    ':' -> "_lambda_"
+
+    '\'' -> "_prime_"
 
     x   -> [x]
