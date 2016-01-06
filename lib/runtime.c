@@ -4,7 +4,7 @@
 
 // LCD
 //------------------------------------------------------------------------------
-
+#ifndef FORCOMPUTER
 
 #define E_PIN 1
 #define LED_PIN 2
@@ -29,6 +29,25 @@
 
 static uint8_t lcd_y = 0;
 static uint8_t lcd_x = 0;
+
+
+void lcd_init();
+
+void lcd_write(char *text, uint8_t anz);
+
+void lcd_printf(char *msg, ...);
+void lcd_print_char(uint8_t daten);
+void lcd_print_string(char *text);
+void lcd_print_uint(uint16_t n);
+void lcd_print_int(int16_t n);
+void lcd_print_tab();
+
+void lcd_set_backlight(uint8_t val);
+void lcd_set_cursor(uint8_t y, uint8_t x);
+void lcd_clear();
+
+
+
 
 static void lcd_send_byte(uint8_t wert, uint8_t RS)
 {
@@ -233,18 +252,23 @@ void lcd_init()
 
 // -----------------------------------------------------------------------------
 
+#else
+
+# include <stdio.h>
+# define lcd_printf printf
+# define lcd_init()
+
+#endif
 
 
 
 
 
-
-typedef void (*__fun)();
+typedef uint8_t (*__fun)(uint8_t);
 
 struct __val;
 
 struct __val {
-    uint8_t num_args;
     void *data;
     struct __node *args;
 };
@@ -255,15 +279,22 @@ struct __node {
 };
 
 
+#ifndef STACKSIZE
+
+# define STACKSIZE 128
+
+#endif
 
 
-static struct __val __val_stack[256];
+static struct __val __val_stack[STACKSIZE / sizeof(struct __val)];
 
-static uint8_t __ip = 0;
+static uint16_t __ip = 0;
 
 struct __node *__create_node(struct __val a, struct __node *next)
 {
     struct __node *n = malloc(sizeof(struct __node));
+	if (n == NULL)
+		lcd_printf("ERRNOMEM\n");
     n->v = a;
     n->next = next;
     return n;
@@ -288,10 +319,9 @@ void __free_args(struct __node *r)
     free(r);
 }
 
-struct __val __val_create_num(uint32_t n)
+struct __val __val_create_num(uint16_t n)
 {
     struct __val v;
-    v.num_args = 0;
     v.data = (void *) n;
     return v;
 }
@@ -299,7 +329,6 @@ struct __val __val_create_num(uint32_t n)
 struct __val __val_create_str(char *s)
 {
     struct __val v;
-    v.num_args = 0;
     v.data = (void *) s;
     return v;
 }
@@ -310,7 +339,7 @@ void __push_val(struct __val v)
     __ip++;
 }
 
-void __push_num(uint32_t val)
+void __push_num(uint16_t val)
 {
     __push_val(__val_create_num(val));
 }
@@ -320,9 +349,9 @@ void __push_str(char *s)
     __push_val(__val_create_str(s));
 }
 
-struct __val __read_val(uint8_t o)
+struct __val __read_val(uint16_t o)
 {
-    return __val_stack[__ip - (o + 1)];
+    return __val_stack[__ip - 1 - o];
 }
 
 void __pop()
@@ -330,9 +359,17 @@ void __pop()
     __ip--;
 }
 
-uint32_t __pop_num(uint8_t o)
+void __pop_n(uint16_t n)
 {
-    uint32_t val = (uint32_t) __read_val(0).data;
+	while (n > 0) {
+		__pop();
+		n--;
+	}
+}
+
+uint16_t __pop_num(uint16_t o)
+{
+    uint16_t val = (uint16_t) __read_val(0).data;
     __pop();
     return val;
 }
@@ -351,22 +388,22 @@ void __call_once()
     struct __val v = __read_val(0);
     struct __val a = __read_val(1);
     v.args = __create_node(a, v.args);
+	uint8_t n = __num_args(v.args);
     __pop();
     __pop();
-    __push_val(v);
-    if (__num_args(v.args) == v.num_args) {
-        // move args to stack
-        __pop();
-        __args_to_stack(v.args);
-        ((__fun) (v.data))();
-        // free the args?
-        //__free_args(v.args);
-        //v.args = NULL;
-        // i think i have to ask the nonexistent garbage collector first
+	__args_to_stack(v.args);
+    if (((__fun) (v.data))(n) == 0) {
+        // the function was not executed
+		__pop_n(n);
+		__push_val(v);
+		return;
     }
+#ifdef FREEARGS
+	__free_args(v.args);
+#endif
 }
 
-void __call(uint8_t n)
+void __call(uint16_t n)
 {
     while (n > 0) {
         __call_once();
@@ -374,268 +411,295 @@ void __call(uint8_t n)
     }
 }
 
-void __unwind(uint8_t o)
+void __unwind(uint16_t o)
 {
     struct __val v = __read_val(0);
-    __pop();
     while (o > 0) {
         __pop();
         o--;
     }
-    __push_val(v);
+    __val_stack[__ip - 1] = v;
 }
 
 
 
 
 
-void __add__()
+uint8_t __add__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data + (uint32_t) b.data);
+    __push_num((uint16_t) a.data + (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__add__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __add__;
     return v;
 }
 
 
-void __sub__()
+uint8_t __sub__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data - (uint32_t) b.data);
+    __push_num((uint16_t) a.data - (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__sub__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __sub__;
     return v;
 }
 
 
-void __mult__()
+uint8_t __mult__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data * (uint32_t) b.data);
+    __push_num((uint16_t) a.data * (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__mult__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __mult__;
     return v;
 }
 
 
-void __div__()
+uint8_t __div__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data / (uint32_t) b.data);
+    __push_num((uint16_t) a.data / (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__div__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __div__;
     return v;
 }
 
 
-void __mod__()
+uint8_t __mod__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data % (uint32_t) b.data);
+    __push_num((uint16_t) a.data % (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__mod__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __mod__;
     return v;
 }
 
 
-void __equal__()
+uint8_t __equal__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data == (uint32_t) b.data);
+    __push_num((uint16_t) a.data == (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__equal__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __equal__;
     return v;
 }
 
 
-void __notequal__()
+uint8_t __notequal__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data != (uint32_t) b.data);
+    __push_num((uint16_t) a.data != (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__notequal__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __notequal__;
     return v;
 }
 
 
-void __shiftl__()
+uint8_t __shiftl__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data << (uint32_t) b.data);
+    __push_num((uint16_t) a.data << (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__shiftl__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __shiftl__;
     return v;
 }
 
 
-void __shiftr__()
+uint8_t __shiftr__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data >> (uint32_t) b.data);
+    __push_num((uint16_t) a.data >> (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__shiftr__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __shiftr__;
     return v;
 }
 
 
-void __and__()
+uint8_t __and__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data & (uint32_t) b.data);
+    __push_num((uint16_t) a.data & (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__and__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __and__;
     return v;
 }
 
 
-void __or__()
+uint8_t __or__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data | (uint32_t) b.data);
+    __push_num((uint16_t) a.data | (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__or__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __or__;
     return v;
 }
 
 
-void __xor__()
+uint8_t __xor__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data ^ (uint32_t) b.data);
+    __push_num((uint16_t) a.data ^ (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__xor__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __xor__;
     return v;
 }
 
 
-void __lower__()
+uint8_t __lower__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data < (uint32_t) b.data);
+    __push_num((uint16_t) a.data < (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__lower__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __lower__;
     return v;
 }
 
 
-void __greater__()
+uint8_t __greater__(uint8_t n)
 {
+	if (n != 2) {
+		return 0;
+	}
     struct __val a = __read_val(0);
     struct __val b = __read_val(1);
-    __push_num((uint32_t) a.data < (uint32_t) b.data);
+    __push_num((uint16_t) a.data < (uint16_t) b.data);
     __unwind(2);
-    return;
+    return 1;
 }
 
 struct __val builtin__greater__builtin()
 {
     struct __val v = {};
-    v.num_args = 2;
     v.data = __greater__;
     return v;
 }

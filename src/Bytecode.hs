@@ -13,7 +13,7 @@ import Data.List hiding (concatMap, sum)
 import Syntax
 
 -- actual bytecode instruction set
-data Instruction = PushNum    Word32
+data Instruction = PushNum    Word16
                  | PushStr    String
                  | PushVar    Int    -- Offset im Stack
                  | PushGlobal String

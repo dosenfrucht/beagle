@@ -1,6 +1,4 @@
-apply(f : num -> num, x : num) : num = f(x);
-
-main : num = 11 + 12;
+main : num = apply_n_times(5, \(n : num) -> n + 1, 1);
 
 apply_n_times(n : num, f : num -> num, x : num) : num =
 	if (n == 0)

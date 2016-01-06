@@ -13,7 +13,7 @@ data Toplevel = TopFunDef Name [(Name, Type)] Type Expr
 
 data Expr = If Expr Expr Expr
           | Op String Expr Expr
-          | Lit Word32
+          | Lit Word16
           | Str String
           | BoolConst Bool
           | Var Name
@@ -47,7 +47,7 @@ data CoreToplevel = CTopVarDef Name Type CoreExpr
                   deriving (Show, Eq)
 
 data CoreExpr = CIf CoreExpr CoreExpr CoreExpr
-              | CLit Word32
+              | CLit Word16
               | CStr String
               | CBool Bool
               | CVar String

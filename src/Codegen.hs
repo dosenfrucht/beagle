@@ -22,11 +22,10 @@ runtimeMain = readFile "lib/runtime_main.c"
 
 cGen :: CompiledFun -> ([Prototype], CCode)
 cGen (n, ic, na, code) = (protos, glob_val ++ fun')
-    where fun = "void __fun_" ++ n' ++ "()\n{\n\t" ++ ccode ++ "\n}\n"
+    where fun = "uint8_t __fun_" ++ n' ++ "(uint8_t n)\n{\n\t" ++ varCheck ++ ccode ++ "\n}\n"
           glob_val = "struct __val " ++ n' ++ "()\n{\n\t" ++ str ++ "\n}\n"
 
           struct =  "struct __val v = {};\n\t"
-                 ++ "v.num_args = " ++  show na ++ ";\n\t"
                  ++ "v.data     = __fun_" ++ n' ++ ";\n\t"
                  ++ "return v;"
 
@@ -38,14 +37,16 @@ cGen (n, ic, na, code) = (protos, glob_val ++ fun')
           protos = protoVal : if not ic then [protoFun] else []
 
           protoVal = "struct __val " ++ n' ++ "();"
-          protoFun = "void __fun_" ++ n' ++ "();"
+          protoFun = "uint8_t __fun_" ++ n' ++ "(uint8_t n);"
+
+          varCheck = "if (n != " ++ show na ++ ") {\n\t\treturn 0;\n\t}\n\t"
 
           str = if ic then struct' else struct
 
           fun' = if ic then "" else fun
 
           n'     = mangle n
-          ccode  = intercalate "\n\t" instrs
+          ccode  =  intercalate "\n\t" instrs
           instrs = map genInstr code
 
 genInstr :: Instruction -> String
@@ -65,7 +66,7 @@ genInstr i = case i of
 
     Pop -> "__pop();"
 
-    Return -> "return;"
+    Return -> "return 1;"
 
     Cond t e -> "if (__pop_num(0)) {" ++ tc ++ "} else {" ++ ec ++ "}"
         where tc = unwords (map genInstr t)
